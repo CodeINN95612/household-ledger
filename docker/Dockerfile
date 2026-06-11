@@ -55,7 +55,8 @@ COPY --from=build /app/prisma-dist ./prisma-dist
 # Generate the Prisma client against the production node_modules.
 RUN pnpm prisma generate
 
-COPY docker-entrypoint.sh ./
+# Build context is the repo root, so the entrypoint is at docker/.
+COPY docker/docker-entrypoint.sh ./
 # Normalize line endings (in case of CRLF on Windows) and make executable.
 RUN sed -i 's/\r$//' docker-entrypoint.sh && chmod +x docker-entrypoint.sh
 

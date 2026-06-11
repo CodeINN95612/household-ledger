@@ -82,22 +82,25 @@ or a volume snapshot) once it holds real data.
 
 ## Docker
 
-The app ships as a single self-contained image (`Dockerfile`) and a one-service
-`docker-compose.yml`. On boot the container applies migrations (`prisma migrate
-deploy`) and seeds the two users (idempotent), then starts Next.js on port 3000.
-SQLite lives on a mounted volume at `/data/app.db`.
+The Docker files live in `docker/` (`Dockerfile`, `docker-compose.yml`,
+`docker-entrypoint.sh`). The build context is the **repo root** — `.dockerignore`
+stays there because that's where Docker reads it from. On boot the container
+applies migrations (`prisma migrate deploy`) and seeds the two users (idempotent),
+then starts Next.js on port 3000. SQLite lives on a mounted volume at
+`/data/app.db`.
 
-Run it locally:
+Run it locally (from the repo root):
 
 ```bash
-docker compose up --build
+docker compose -f docker/docker-compose.yml up --build
 # then add a temporary port mapping if you want to reach it from the host:
+#   docker build -f docker/Dockerfile -t household-ledger .
 #   docker run -p 3000:3000 -v hl-data:/data \
 #     -e DATABASE_URL=file:/data/app.db -e AUTH_SECRET=… \
 #     -e SEED_USER1_EMAIL=… (etc) household-ledger
 ```
 
-`docker-compose.yml` deliberately has **no host port mapping and no reverse-proxy
+The compose file deliberately has **no host port mapping and no reverse-proxy
 service** — that's handled by Dokploy's Traefik (see below).
 
 ## Deploying on Dokploy
@@ -105,9 +108,10 @@ service** — that's handled by Dokploy's Traefik (see below).
 The Droplet already runs Dokploy, so deployment is done through its dashboard
 (spec §5b). Traefik handles routing and TLS — **do not add Caddy/nginx.**
 
-1. **Push** this repo (with `Dockerfile` + `docker-compose.yml`) to GitHub/GitLab.
-2. In Dokploy: create a project → add a **Compose** service → point it at the repo
-   and `docker-compose.yml`.
+1. **Push** this repo (the `docker/` folder holds the build files) to GitHub/GitLab.
+2. In Dokploy: create a project → add a **Compose** service → point its Compose Path
+   at `docker/docker-compose.yml`. (The build context is the repo root, set via
+   `context: ..` in the compose file.)
 3. **Persistent storage:** the compose file declares a named volume `db-data`
    mounted at `/data`. Confirm it's preserved across redeploys before entering real
    data — this is the one thing easy to get wrong. The DB is `file:/data/app.db`.
@@ -156,9 +160,10 @@ src/                        ── all application code ──
   types/next-auth.d.ts      Session/JWT type augmentation (user id)
 
 ── repository root ──
+docker/                     Dockerfile, docker-compose.yml, docker-entrypoint.sh
 prisma/                     Schema, migrations, seed
 public/                     Static assets
-Dockerfile, docker-compose.yml, docker-entrypoint.sh
+.dockerignore               (must stay at root — it's the build-context root)
 next.config.mjs, tsconfig.json, package.json, .env(.example)
 ```
 

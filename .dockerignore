@@ -20,9 +20,10 @@ prisma/*.db-journal
 .gitignore
 .claude
 *.md
-Dockerfile
 .dockerignore
-docker-compose.yml
+# Docker definitions (the entrypoint IS needed in the context, so don't ignore it)
+docker/Dockerfile
+docker/docker-compose.yml
 
 # Misc
 .DS_Store
