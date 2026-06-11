@@ -105,32 +105,22 @@ service** — that's handled by Dokploy's Traefik (see below).
 
 ## Deploying on Dokploy
 
-The Droplet already runs Dokploy, so deployment is done through its dashboard
-(spec §5b). Traefik handles routing and TLS — **do not add Caddy/nginx.**
+Deployment runs through Dokploy as a **Compose** service; its Traefik handles routing
+and TLS (**do not add Caddy/nginx**). The full walkthrough — env vars, the persistent
+volume, the **domain setup**, Cloudflare SSL settings, and routing troubleshooting —
+lives in **[`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md)**.
 
-1. **Push** this repo (the `docker/` folder holds the build files) to GitHub/GitLab.
-2. In Dokploy: create a project → add a **Compose** service → point its Compose Path
-   at `docker/docker-compose.yml`. (The build context is the repo root, set via
-   `context: ..` in the compose file.)
-3. **Persistent storage:** the compose file declares a named volume `db-data`
-   mounted at `/data`. Confirm it's preserved across redeploys before entering real
-   data — this is the one thing easy to get wrong. The DB is `file:/data/app.db`.
-4. **Environment:** in the service's Environment settings, set:
-   - `AUTH_SECRET` — a long random string
-     (`node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`).
-   - `SEED_USER1_EMAIL` / `SEED_USER1_PASSWORD` / `SEED_USER1_NAME` and the same for
-     `SEED_USER2_*`.
-   `DATABASE_URL` is already fixed to the volume path in `docker-compose.yml`.
-5. **Domain + HTTPS:** add an `A` record for your subdomain (e.g.
-   `split.yourdomain.com`) → Droplet IP, then in the service's Domains settings add
-   that subdomain with **HTTPS / Let's Encrypt** and target **port 3000**. Auth.js
-   runs with `trustHost`, so it honors the host/proto Traefik forwards — no
-   `AUTH_URL` needed.
-6. **Redeploys** re-run migrations and the idempotent seed automatically; the volume
-   keeps your data.
+The short version:
 
-> Verified locally: image builds, first boot migrates + seeds, login works, and the
-> database persists across a full container recreation on the same volume.
+1. **Push** this repo, then in Dokploy add a **Compose** service with Compose Path
+   `docker/docker-compose.yml` (build context is the repo root via `context: ..`).
+2. Set `AUTH_SECRET` and the `SEED_USER*` vars in **Environment** (`DATABASE_URL` is
+   fixed to the volume in the compose file).
+3. **Domain:** in the service's **Domains** tab, add your subdomain → service `app`,
+   container port `3000`, HTTPS/Let's Encrypt. Routing is **not** in the compose file —
+   Dokploy injects the Traefik labels for you.
+4. **Redeploy.** ⚠️ Adding a domain does nothing until you redeploy — that's when the
+   routing labels get applied. (Skipping this gives a Traefik `404`.)
 
 ## Project layout
 
@@ -161,6 +151,7 @@ src/                        ── all application code ──
 
 ── repository root ──
 docker/                     Dockerfile, docker-compose.yml, docker-entrypoint.sh
+docs/                       DEPLOYMENT.md (Dokploy + domain walkthrough)
 prisma/                     Schema, migrations, seed
 public/                     Static assets
 .dockerignore               (must stay at root — it's the build-context root)
