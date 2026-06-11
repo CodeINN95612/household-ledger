@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+/*
+  Household Ledger design system.
+  Calm domestic money tool for two partners. One bold idea (the settlement
+  statement + proportional split-bar); everything else stays quiet.
+*/
+
+@theme {
+  /* Surfaces & ink */
+  --color-paper: #f4f6f3; /* soft cool off-white, a whisper of sage */
+  --color-surface: #ffffff;
+  --color-ink: #1b1f23; /* near-black slate */
+  --color-muted: #6e767d; /* secondary text */
+  --color-faint: #9aa1a6; /* tertiary / captions */
+  --color-line: #e4e7e2; /* hairline borders */
+  --color-line-strong: #d3d8d1;
+
+  /* Brand / primary action — confident, calm teal */
+  --color-brand: #15695a;
+  --color-brand-hover: #0f5446;
+  --color-brand-soft: #e3efea;
+
+  /* Person identity colors (stable per person, same for both viewers) */
+  --color-person-a: #3e4fa0; /* indigo */
+  --color-person-a-soft: #e8eaf6;
+  --color-person-b: #b3792a; /* ochre */
+  --color-person-b-soft: #f6ecdc;
+
+  /* Status accents (used sparingly) */
+  --color-owed: #15695a; /* you're owed → teal */
+  --color-owes: #b0503b; /* you owe → muted clay */
+  --color-owes-soft: #f6e6e1;
+
+  --font-sans: var(--font-schibsted), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+
+  --radius: 0.625rem;
+}
+
+html {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+/* Money and other figures align in columns. */
+.tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Small uppercase section eyebrow. */
+.eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

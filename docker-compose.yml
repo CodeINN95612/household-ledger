@@ -1,0 +1,33 @@
+# Single self-contained service for Dokploy. Dokploy's Traefik handles routing
+# and TLS, so there is NO reverse-proxy service here and NO host port mapping —
+# Dokploy routes the domain to the container's exposed port 3000.
+#
+# Set the secrets (AUTH_SECRET, SEED_USER*) in Dokploy's Environment settings;
+# Dokploy writes them to a .env beside this file, and the ${VAR} references below
+# pick them up. DATABASE_URL is fixed to the persistent volume on purpose.
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      NODE_ENV: production
+      # SQLite file on the persistent volume — the single backup target.
+      DATABASE_URL: "file:/data/app.db"
+      AUTH_SECRET: "${AUTH_SECRET}"
+      SEED_USER1_EMAIL: "${SEED_USER1_EMAIL}"
+      SEED_USER1_PASSWORD: "${SEED_USER1_PASSWORD}"
+      SEED_USER1_NAME: "${SEED_USER1_NAME}"
+      SEED_USER2_EMAIL: "${SEED_USER2_EMAIL}"
+      SEED_USER2_PASSWORD: "${SEED_USER2_PASSWORD}"
+      SEED_USER2_NAME: "${SEED_USER2_NAME}"
+    volumes:
+      # Named volume keeps the database across redeploys and restarts.
+      - db-data:/data
+
+volumes:
+  db-data:

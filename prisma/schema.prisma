@@ -1,0 +1,54 @@
+// Prisma schema for the Shared Expense Splitter (spec §6).
+// SQLite is the v1 datastore: zero-cost, file-based, one file to back up.
+// All money is stored as integer cents — never floats.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  createdAt    DateTime @default(now())
+
+  expenses Expense[] @relation("ExpensesPaid")
+  incomes  Income[]
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  date        DateTime // the expense date
+  monthKey    String // settlement period, e.g. "2026-06"
+  description String
+  amountCents Int // integer cents, never floats
+  // SQLite has no native enums; constrained to "shared" | "personal" at the
+  // app layer (see lib/validation.ts).
+  type         String
+  paidByUserId String
+  paidBy       User     @relation("ExpensesPaid", fields: [paidByUserId], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([monthKey])
+}
+
+model Income {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  monthKey    String // e.g. "2026-06"
+  amountCents Int // integer cents
+  isPrivate   Boolean  @default(false) // frozen into history per record
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, monthKey])
+  @@index([monthKey])
+}
