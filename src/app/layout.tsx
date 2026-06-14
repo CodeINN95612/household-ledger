@@ -26,7 +26,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${schibsted.variable} ${plexMono.variable} h-full`}>
-      <body className="min-h-full bg-paper text-ink">{children}</body>
+      <body className="min-h-full bg-paper text-ink">
+          <div className="lg:ml-[220px]">{children}</div>
+        </body>
     </html>
   );
 }

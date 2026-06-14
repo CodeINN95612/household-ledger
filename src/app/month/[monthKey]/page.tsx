@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/current-user";
-import { getMonthData, getSettlementView } from "@/lib/data";
+import { getMonthData, getSettlementView, getSpendingAnomalyData } from "@/lib/data";
 import { isValidMonthKey, currentMonthKey } from "@/lib/month";
 import { buildColorMap } from "@/lib/person";
 import { createExpenseAction } from "@/app/month-actions";
@@ -11,6 +11,7 @@ import { BalanceSheet } from "@/components/BalanceSheet";
 import { IncomePanel } from "@/components/IncomePanel";
 import { ExpenseList } from "@/components/ExpenseList";
 import { ExpenseForm } from "@/components/ExpenseForm";
+import { AnomalyFlag } from "@/components/AnomalyFlag";
 import { Card } from "@/components/ui/Card";
 
 export default async function MonthPage({
@@ -24,9 +25,10 @@ export default async function MonthPage({
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const [monthData, settlement] = await Promise.all([
+  const [monthData, settlement, anomaly] = await Promise.all([
     getMonthData(user, monthKey),
     getSettlementView(user, monthKey),
+    getSpendingAnomalyData(monthKey),
   ]);
 
   const colorByUser = buildColorMap(monthData.members.map((m) => m.id));
@@ -70,6 +72,13 @@ export default async function MonthPage({
               mode="create"
             />
           </Card>
+
+          {anomaly && (
+            <AnomalyFlag
+              currentVariableCents={anomaly.currentVariableCents}
+              avgPrior6VariableCents={anomaly.avgPrior6VariableCents}
+            />
+          )}
 
           <Card eyebrow="Expenses" title="This month">
             <div className="-mx-5 -my-4">

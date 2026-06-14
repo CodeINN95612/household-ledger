@@ -41,6 +41,36 @@ export async function createExpenseAction(
   }
   const data = parsed.data;
   const monthKey = monthKeyForDate(data.date);
+
+  // If installments > 1, create a FinancedExpense instead of a regular Expense
+  const installmentsRaw = String(formData.get("installments") ?? "").trim();
+  const installments = installmentsRaw ? parseInt(installmentsRaw, 10) : 1;
+  if (installments > 1) {
+    if (!Number.isInteger(installments) || installments < 2 || installments > 120) {
+      return { error: "Installments must be between 2 and 120." };
+    }
+    const rateRaw = String(formData.get("annualRate") ?? "").trim();
+    const ratePct = rateRaw ? parseFloat(rateRaw) : 0;
+    if (isNaN(ratePct) || ratePct < 0 || ratePct > 100) {
+      return { error: "Annual interest rate must be between 0 and 100." };
+    }
+    const annualRateBps = Math.round(ratePct * 100);
+    await prisma.financedExpense.create({
+      data: {
+        description: data.description,
+        totalCents: data.amountCents,
+        installments,
+        annualRateBps,
+        startMonthKey: monthKey,
+        type: data.type,
+        paidByUserId: data.paidByUserId,
+      },
+    });
+    revalidateMonth(monthKey);
+    return { ok: true };
+  }
+
+  const category = String(formData.get("category") ?? "").trim() || null;
   await prisma.expense.create({
     data: {
       date: data.date,
@@ -49,10 +79,20 @@ export async function createExpenseAction(
       amountCents: data.amountCents,
       type: data.type,
       paidByUserId: data.paidByUserId,
+      category,
     },
   });
   revalidateMonth(monthKey);
   return { ok: true };
+}
+
+export async function cancelFinancedExpenseAction(formData: FormData): Promise<void> {
+  await requireUser();
+  const id = String(formData.get("id") ?? "");
+  const existing = await prisma.financedExpense.findUnique({ where: { id } });
+  if (!existing || existing.cancelledAt) return;
+  await prisma.financedExpense.update({ where: { id }, data: { cancelledAt: new Date() } });
+  revalidatePath("/month", "layout");
 }
 
 export async function updateExpenseAction(
@@ -70,6 +110,7 @@ export async function updateExpenseAction(
   }
   const data = parsed.data;
   const monthKey = monthKeyForDate(data.date);
+  const category = String(formData.get("category") ?? "").trim() || null;
   await prisma.expense.update({
     where: { id },
     data: {
@@ -79,6 +120,7 @@ export async function updateExpenseAction(
       amountCents: data.amountCents,
       type: data.type,
       paidByUserId: data.paidByUserId,
+      category,
     },
   });
   revalidateMonth(monthKey);
@@ -93,6 +135,25 @@ export async function deleteExpenseAction(formData: FormData): Promise<void> {
   if (!existing) return;
   await prisma.expense.delete({ where: { id } });
   revalidateMonth(existing.monthKey);
+}
+
+export async function tagExpenseAction(formData: FormData): Promise<void> {
+  await requireUser();
+  const id = String(formData.get("id") ?? "");
+  const existing = await prisma.expense.findUnique({ where: { id }, select: { monthKey: true } });
+  if (!existing) return;
+
+  const categoryRaw = formData.get("category")?.toString().trim();
+  const category = categoryRaw || null;
+
+  const recurringRaw = formData.get("isRecurringFixed")?.toString();
+  const isRecurringFixed =
+    recurringRaw === "true" ? true : recurringRaw === "false" ? false : null;
+
+  await prisma.expense.update({ where: { id }, data: { category, isRecurringFixed } });
+  revalidateMonth(existing.monthKey);
+  revalidatePath("/plan");
+  revalidatePath("/health");
 }
 
 export async function saveIncomeAction(
