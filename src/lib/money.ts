@@ -28,3 +28,20 @@ export function parseDollarsToCents(input: string): number | null {
 export function centsToInputValue(cents: number): string {
   return (cents / 100).toFixed(2);
 }
+
+/**
+ * Compute the per-installment amount for a financed expense.
+ * annualRateBps: annual interest rate in basis points (0 = interest-free).
+ * Uses standard amortization formula when rate > 0.
+ */
+export function computeInstallmentCents(
+  totalCents: number,
+  installments: number,
+  annualRateBps: number,
+): number {
+  if (installments <= 1) return totalCents;
+  if (annualRateBps === 0) return Math.round(totalCents / installments);
+  const r = annualRateBps / 10000 / 12; // monthly rate
+  const factor = Math.pow(1 + r, installments);
+  return Math.round((totalCents * r * factor) / (factor - 1));
+}

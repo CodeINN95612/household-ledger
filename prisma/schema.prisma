@@ -18,8 +18,11 @@ model User {
   displayName  String
   createdAt    DateTime @default(now())
 
-  expenses Expense[] @relation("ExpensesPaid")
-  incomes  Income[]
+  expenses         Expense[]         @relation("ExpensesPaid")
+  financedExpenses FinancedExpense[] @relation("FinancedExpensesPaid")
+  incomes          Income[]
+  allocationRules  AllocationRule[]
+  fundEntries      FundEntry[]
 }
 
 model Expense {
@@ -30,11 +33,13 @@ model Expense {
   amountCents Int // integer cents, never floats
   // SQLite has no native enums; constrained to "shared" | "personal" at the
   // app layer (see lib/validation.ts).
-  type         String
-  paidByUserId String
-  paidBy       User     @relation("ExpensesPaid", fields: [paidByUserId], references: [id])
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  type              String
+  paidByUserId      String
+  paidBy            User     @relation("ExpensesPaid", fields: [paidByUserId], references: [id])
+  category          String? // optional lightweight category for spending intelligence
+  isRecurringFixed  Boolean? // null = auto-detect; true/false = manual override
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   @@index([monthKey])
 }
@@ -51,4 +56,114 @@ model Income {
 
   @@unique([userId, monthKey])
   @@index([monthKey])
+}
+
+// ── Financed expenses (credit card installments) ─────────────────────────────
+
+model FinancedExpense {
+  id            String    @id @default(cuid())
+  description   String
+  totalCents    Int       // original purchase total in cents
+  installments  Int       // number of monthly payments
+  annualRateBps Int       @default(0) // annual interest rate in basis points; 0 = interest-free
+  startMonthKey String    // YYYY-MM of first payment
+  type          String    // "shared" | "personal"
+  paidByUserId  String
+  paidByUser    User      @relation("FinancedExpensesPaid", fields: [paidByUserId], references: [id])
+  category      String?
+  cancelledAt   DateTime? // when set, installments from this month onward stop appearing
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([startMonthKey])
+  @@index([paidByUserId])
+}
+
+// ── v2: Financial Health & Planning ─────────────────────────────────────────
+
+model Fund {
+  id          String   @id @default(cuid())
+  name        String
+  scope       String   // "personal" | "couple"
+  ownerUserId String?  // required when scope = "personal"; null for couple funds
+  targetCents Int?     // optional savings target in cents
+  targetDate  DateTime?
+  isPrivate   Boolean  @default(false) // only meaningful for personal scope
+  isSinking   Boolean  @default(false)
+  sinkingNote String?  // description of the recurring bill this fund covers
+  archived    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  entries         FundEntry[]
+  allocationRules AllocationRule[]
+}
+
+// One intent: "X% (or $Y fixed) of my income → this fund each month"
+model AllocationRule {
+  id                  String   @id @default(cuid())
+  userId              String
+  user                User     @relation(fields: [userId], references: [id])
+  fundId              String
+  fund                Fund     @relation(fields: [fundId], references: [id])
+  percentBps          Int      // basis points of monthly income; 1000 = 10%
+  fixedCentsOverride  Int?     // if set, use this fixed amount instead of percent
+  active              Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([userId, fundId])
+  @@index([userId])
+}
+
+// Immutable ledger — replay to get any fund's balance at any point
+model FundEntry {
+  id          String   @id @default(cuid())
+  fundId      String
+  fund        Fund     @relation(fields: [fundId], references: [id])
+  userId      String   // who recorded this entry
+  user        User     @relation(fields: [userId], references: [id])
+  monthKey    String   // e.g. "2026-06"
+  amountCents Int      // positive = contribution/adjustment in; negative = withdrawal
+  kind        String   // "contribution" | "withdrawal" | "adjustment"
+  note        String?
+  createdAt   DateTime @default(now())
+
+  @@index([fundId, monthKey])
+}
+
+// Overridable projection inputs: income assumptions, one-off events, forecast overrides
+model PlanAssumption {
+  id          String   @id @default(cuid())
+  userId      String?  // null = household-level
+  monthKey    String?  // null = default/recurring assumption
+  kind        String   // "income" | "one-off-shared" | "one-off-personal" | "shared-forecast-override"
+  amountCents Int
+  note        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, monthKey])
+}
+
+// Named what-if plans; exactly one has baseline=true
+model Scenario {
+  id              String   @id @default(cuid())
+  name            String
+  createdByUserId String
+  baseline        Boolean  @default(false) // exactly one active baseline
+  overridesJson   String   // JSON: changed inputs vs baseline
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Singleton household-level configuration
+model HouseholdSettings {
+  id                        String  @id @default("singleton")
+  frontingUserId            String? // user who fronts shared expenses
+  floatReserveCentsOverride Int?    // manual pin for float reserve; null = auto
+  coupleGoalSplitMode       String  @default("proportional") // "proportional" | "equal"
+  projectionHorizonMonths   Int     @default(12)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
 }

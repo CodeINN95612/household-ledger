@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import type { ActionState } from "@/app/month-actions";
 import { Field, Input, Select } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
+import { EXPENSE_CATEGORIES } from "@/lib/categories";
 
 export interface ExpenseFormMember {
   id: string;
@@ -17,7 +18,9 @@ export interface ExpenseInitial {
   amount: string; // dollars
   type: "shared" | "personal";
   paidByUserId: string;
+  category: string | null;
 }
+
 
 interface Props {
   action: (prev: ActionState, formData: FormData) => Promise<ActionState>;
@@ -49,10 +52,14 @@ export function ExpenseForm({
 }: Props) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const formRef = useRef<HTMLFormElement>(null);
+  const [isFinanced, setIsFinanced] = useState(false);
 
   useEffect(() => {
     if (!state.ok) return;
-    if (mode === "create") formRef.current?.reset();
+    if (mode === "create") {
+      formRef.current?.reset();
+      setIsFinanced(false);
+    }
     onDone?.();
   }, [state, mode, onDone]);
 
@@ -70,7 +77,7 @@ export function ExpenseForm({
             required
           />
         </Field>
-        <Field label="Amount" htmlFor="exp-amount">
+        <Field label={isFinanced ? "Total amount" : "Amount"} htmlFor="exp-amount">
           <Input
             id="exp-amount"
             name="amount"
@@ -102,7 +109,56 @@ export function ExpenseForm({
             <option value="personal">Personal</option>
           </Select>
         </Field>
+        <Field label="Category" htmlFor="exp-category">
+          <Select id="exp-category" name="category" defaultValue={initial?.category ?? ""}>
+            <option value="">None</option>
+            {EXPENSE_CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {c.charAt(0).toUpperCase() + c.slice(1)}
+              </option>
+            ))}
+          </Select>
+        </Field>
       </div>
+
+      {/* Financed toggle — only available when creating */}
+      {mode === "create" && (
+        <div className="flex flex-col gap-3 border-t border-line pt-3">
+          <label className="flex cursor-pointer items-center gap-2.5 text-sm text-muted">
+            <input
+              type="checkbox"
+              checked={isFinanced}
+              onChange={(e) => setIsFinanced(e.target.checked)}
+              className="h-4 w-4 rounded border-line-strong accent-brand"
+            />
+            Financed (credit card installments)
+          </label>
+
+          {isFinanced && (
+            <div className="grid gap-3 sm:grid-cols-2 pl-6">
+              <Field label="Months" htmlFor="exp-installments">
+                <Input
+                  id="exp-installments"
+                  name="installments"
+                  type="number"
+                  min="2"
+                  max="120"
+                  placeholder="12"
+                  required
+                />
+              </Field>
+              <Field label="Annual interest %" htmlFor="exp-rate" hint="Leave empty for 0% (interest-free)">
+                <Input
+                  id="exp-rate"
+                  name="annualRate"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                />
+              </Field>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="flex items-center gap-3">
         <Button type="submit" size="sm" disabled={pending}>
