@@ -18,6 +18,13 @@ function revalidateMonth(monthKey: string) {
   revalidatePath("/");
 }
 
+function parseIsRecurringFixed(formData: FormData): boolean | null {
+  const raw = formData.get("isRecurringFixed")?.toString();
+  if (raw === "true") return true;
+  if (raw === "false") return false;
+  return null;
+}
+
 function readExpenseForm(formData: FormData) {
   const dateStr = String(formData.get("date") ?? "");
   const amountCents = parseDollarsToCents(String(formData.get("amount") ?? ""));
@@ -55,6 +62,7 @@ export async function createExpenseAction(
       return { error: "Annual interest rate must be between 0 and 100." };
     }
     const annualRateBps = Math.round(ratePct * 100);
+    const category = String(formData.get("category") ?? "").trim() || null;
     await prisma.financedExpense.create({
       data: {
         description: data.description,
@@ -64,6 +72,7 @@ export async function createExpenseAction(
         startMonthKey: monthKey,
         type: data.type,
         paidByUserId: data.paidByUserId,
+        category,
       },
     });
     revalidateMonth(monthKey);
@@ -71,6 +80,7 @@ export async function createExpenseAction(
   }
 
   const category = String(formData.get("category") ?? "").trim() || null;
+  const isRecurringFixed = parseIsRecurringFixed(formData);
   await prisma.expense.create({
     data: {
       date: data.date,
@@ -80,6 +90,7 @@ export async function createExpenseAction(
       type: data.type,
       paidByUserId: data.paidByUserId,
       category,
+      isRecurringFixed,
     },
   });
   revalidateMonth(monthKey);
@@ -111,6 +122,7 @@ export async function updateExpenseAction(
   const data = parsed.data;
   const monthKey = monthKeyForDate(data.date);
   const category = String(formData.get("category") ?? "").trim() || null;
+  const isRecurringFixed = parseIsRecurringFixed(formData);
   await prisma.expense.update({
     where: { id },
     data: {
@@ -121,6 +133,7 @@ export async function updateExpenseAction(
       type: data.type,
       paidByUserId: data.paidByUserId,
       category,
+      isRecurringFixed,
     },
   });
   revalidateMonth(monthKey);
@@ -140,20 +153,28 @@ export async function deleteExpenseAction(formData: FormData): Promise<void> {
 export async function tagExpenseAction(formData: FormData): Promise<void> {
   await requireUser();
   const id = String(formData.get("id") ?? "");
-  const existing = await prisma.expense.findUnique({ where: { id }, select: { monthKey: true } });
-  if (!existing) return;
-
   const categoryRaw = formData.get("category")?.toString().trim();
   const category = categoryRaw || null;
 
-  const recurringRaw = formData.get("isRecurringFixed")?.toString();
-  const isRecurringFixed =
-    recurringRaw === "true" ? true : recurringRaw === "false" ? false : null;
+  // Try regular expense first
+  const existing = await prisma.expense.findUnique({ where: { id }, select: { monthKey: true } });
+  if (existing) {
+    const recurringRaw = formData.get("isRecurringFixed")?.toString();
+    const isRecurringFixed =
+      recurringRaw === "true" ? true : recurringRaw === "false" ? false : null;
+    await prisma.expense.update({ where: { id }, data: { category, isRecurringFixed } });
+    revalidateMonth(existing.monthKey);
+    revalidatePath("/plan");
+    revalidatePath("/health");
+    return;
+  }
 
-  await prisma.expense.update({ where: { id }, data: { category, isRecurringFixed } });
-  revalidateMonth(existing.monthKey);
-  revalidatePath("/plan");
-  revalidatePath("/health");
+  // Fall back to financed expense (only category is editable; recurring is always fixed)
+  const financed = await prisma.financedExpense.findUnique({ where: { id } });
+  if (financed) {
+    await prisma.financedExpense.update({ where: { id }, data: { category } });
+    revalidatePath("/month", "layout");
+  }
 }
 
 export async function saveIncomeAction(
