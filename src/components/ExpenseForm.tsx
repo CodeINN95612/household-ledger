@@ -19,6 +19,7 @@ export interface ExpenseInitial {
   type: "shared" | "personal";
   paidByUserId: string;
   category: string | null;
+  isRecurringFixed: boolean | null;
 }
 
 
@@ -117,6 +118,27 @@ export function ExpenseForm({
                 {c.charAt(0).toUpperCase() + c.slice(1)}
               </option>
             ))}
+          </Select>
+        </Field>
+        <Field
+          label="Spending type"
+          htmlFor="exp-recurring"
+          hint="Affects the shared spend forecast."
+        >
+          <Select
+            id="exp-recurring"
+            name="isRecurringFixed"
+            defaultValue={
+              initial?.isRecurringFixed === true
+                ? "true"
+                : initial?.isRecurringFixed === false
+                  ? "false"
+                  : ""
+            }
+          >
+            <option value="">Auto-detect</option>
+            <option value="true">Fixed (e.g. rent, subscriptions)</option>
+            <option value="false">Variable (e.g. groceries, dining)</option>
           </Select>
         </Field>
       </div>
